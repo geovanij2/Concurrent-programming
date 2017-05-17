@@ -12,76 +12,56 @@
 * means on, space means off.
 *
 */
-
-/* Versão 1.0
-* Adicionado as variáveis globais
-* Feito a leitura e a verificação do argumento passado via terminal
-* Criação das threads
-*/
 #include <stdio.h>
 #include <stdlib.h>
-#include <pthread.h>
-
 typedef unsigned char cell_t;
-
-//Variaveis globais
-cell_t **prev, **next, **tmp, **newboard, **board;
-int maxth, steps, cont = 0, size;
-pthread_mutex_t m;
-
 
 cell_t ** allocate_board (int size) {
   cell_t ** board = (cell_t **) malloc(sizeof(cell_t*)*size);
-  int	i;
-  for (i=0; i<size; i++)
-  board[i] = (cell_t *) malloc(sizeof(cell_t)*size);
+  for (int i=0; i<size; i++) {
+    board[i] = (cell_t *) malloc(sizeof(cell_t)*size);
+  }
   return board;
 }
 
 void free_board (cell_t ** board, int size) {
-  int     i;
-  for (i=0; i<size; i++)
-  free(board[i]);
+  for (int i=0; i<size; i++) {
+    free(board[i]);
+  }
   free(board);
 }
 
 
 /* return the number of on cells adjacent to the i,j cell */
 int adjacent_to (cell_t ** board, int size, int i, int j) {
-  int	k, l, count=0;
+  int count=0;
 
   int sk = (i>0) ? i-1 : i;
   int ek = (i+1 < size) ? i+1 : i;
   int sl = (j>0) ? j-1 : j;
   int el = (j+1 < size) ? j+1 : j;
 
-  for (k=sk; k<=ek; k++)
-  for (l=sl; l<=el; l++)
-  count+=board[k][l];
+  for (int k=sk; k<=ek; k++) {
+    for (int l=sl; l<=el; l++) {
+      count+=board[k][l];
+    }
   count-=board[i][j];
-
+  }
   return count;
 }
 
-void *play () {
-  int	i, j, a;
+void play (cell_t ** board, cell_t ** newboard, int size) {
+  int	a;
   /* for each cell, apply the rules of Life */
-  // Barrera
-  // Fazer as gerações dentro da propria função
-    if(cont >= size)
-      pthread_exit(NULL);
-    pthread_mutex_lock(&m);
-    ++cont;
-    i = cont-1;
-    pthread_mutex_unlock(&m);
-  	for (j=0; j<size; j++) {
-    a = adjacent_to (board, size, i, j);
-    if (a == 2) newboard[i][j] = board[i][j];
-    if (a == 3) newboard[i][j] = 1;
-    if (a < 2) newboard[i][j] = 0;
-    if (a > 3) newboard[i][j] = 0;
+  for (int i=0; i<size; i++) {
+    for (int j=0; j<size; j++) {
+      a = adjacent_to (board, size, i, j);
+      if (a == 2) newboard[i][j] = board[i][j];
+      if (a == 3) newboard[i][j] = 1;
+      if (a < 2) newboard[i][j] = 0;
+      if (a > 3) newboard[i][j] = 0;
+    }
   }
-  	play(board, newboard, size);
 }
 
 /* print the life board */
@@ -116,10 +96,8 @@ void read_file (FILE * f, cell_t ** board, int size) {
   }
 }
 
-int main (int argc, char *argv[]) {
-  int i, j;
-  pthread_mutex_init(&m,NULL); 
-  maxth = argc > 1? atoi(argv[1]) : 1;  // leitura do argumento
+int main () {
+  int size, steps;
   FILE    *f;
   f = stdin;
   fscanf(f,"%d %d", &size, &steps);
@@ -128,21 +106,14 @@ int main (int argc, char *argv[]) {
   fclose(f);
   cell_t ** next = allocate_board (size);
   cell_t ** tmp;
+  int i;
   #ifdef DEBUG
   printf("Initial:\n");
   print(prev,size);
   #endif
-  // ---------- Criação de threads ---------- //
-  pthread_t threads[maxth];
-  //int thread_arg[maxth];
-  for (i=0; i<maxth; i++) {
-    //thread_arg[i] = i;
-    pthread_create(&threads[i], NULL, play, NULL); //&thread_arg[i]
-  }
-  	for (i=0; i<steps; i++) {
-		for (j=0; j<maxth; j++)
-    	pthread_join(threads[j], NULL);  
 
+  for (i=0; i<steps; i++) {
+    play (prev,next,size);
     #ifdef DEBUG
     printf("%d ----------\n", i + 1);
     print (next,size);
@@ -156,7 +127,7 @@ int main (int argc, char *argv[]) {
   printf("Final:\n");
   print (prev,size);
 #endif
-  pthread_mutex_destroy(&m);
+
   free_board(prev,size);
   free_board(next,size);
 }

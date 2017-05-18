@@ -14,7 +14,11 @@
 */
 #include <stdio.h>
 #include <stdlib.h>
+#include <pthread.h>  // include na biblioteca de threads para linux
+#include <sys/types.h>
+
 typedef unsigned char cell_t;
+int max_threads;
 
 cell_t ** allocate_board (int size) {
   cell_t ** board = (cell_t **) malloc(sizeof(cell_t*)*size);
@@ -48,7 +52,9 @@ int adjacent_to (cell_t ** board, int size, int i, int j) {
 
   return count;
 }
-
+/*------------------------------------------------------------
+  nova função play receberá 1 argumento e vai controlar steps
+--------------------------------------------------------------*/
 void play (cell_t ** board, cell_t ** newboard, int size) {
   int	i, j, a;
   /* for each cell, apply the rules of Life */
@@ -94,7 +100,15 @@ void read_file (FILE * f, cell_t ** board, int size) {
   }
 }
 
-int main () {
+int main (int argc, char const *argv[]) {
+  // recebendo numero maximo de threads como parametro argv
+  // e setando max_threads como default = 2
+  if (argc > 1) {
+    max_threads = atoi(argv[0]);
+  } else {
+    max_threads = 2;
+  }
+
   int size, steps;
   FILE    *f;
   f = stdin;
@@ -105,10 +119,25 @@ int main () {
   cell_t ** next = allocate_board (size);
   cell_t ** tmp;
   int i;
+
   #ifdef DEBUG
   printf("Initial:\n");
   print(prev,size);
   #endif
+
+/*-------------------------------------
+Definir o argumento passado para as threads
+
+--------------------------------------*/
+  pthread_t threads[max_threads];
+
+  for (i=0; i<max_threads; i++) {
+    pthread_create(&threads[i], NULL, play, NULL);
+  }
+
+  for (i=0; i<max_threads; i++) {
+    pthread_join(threads[i], NULL);
+  }
 
   for (i=0; i<steps; i++) {
     play (prev,next,size);

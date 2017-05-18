@@ -21,6 +21,8 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <pthread.h>
+#include <sys/types.h>
+#include <unistd.h>
 
 typedef unsigned char cell_t;
 
@@ -63,7 +65,7 @@ int adjacent_to (cell_t ** board, int size, int i, int j) {
   return count;
 }
 
-void *play () {
+void *play (void *argc) {
   int	i, j, a;
   /* for each cell, apply the rules of Life */
   // Barrera
@@ -81,7 +83,6 @@ void *play () {
     if (a < 2) newboard[i][j] = 0;
     if (a > 3) newboard[i][j] = 0;
   }
-  	play(board, newboard, size);
 }
 
 /* print the life board */
@@ -118,7 +119,7 @@ void read_file (FILE * f, cell_t ** board, int size) {
 
 int main (int argc, char *argv[]) {
   int i, j;
-  pthread_mutex_init(&m,NULL); 
+  pthread_mutex_init(&m,NULL);
   maxth = argc > 1? atoi(argv[1]) : 1;  // leitura do argumento
   FILE    *f;
   f = stdin;
@@ -141,7 +142,7 @@ int main (int argc, char *argv[]) {
   }
   	for (i=0; i<steps; i++) {
 		for (j=0; j<maxth; j++)
-    	pthread_join(threads[j], NULL);  
+    	pthread_join(threads[j], NULL);
 
     #ifdef DEBUG
     printf("%d ----------\n", i + 1);

@@ -21,8 +21,6 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <pthread.h>
-#include <sys/types.h>
-#include <unistd.h>
 
 typedef unsigned char cell_t;
 
@@ -30,11 +28,12 @@ typedef unsigned char cell_t;
 cell_t **prev, **next, **tmp, **newboard, **board;
 int maxth, steps, cont = 0, size;
 pthread_mutex_t m;
+pthread_barrier_t barreira;
 
 
 cell_t ** allocate_board (int size) {
   cell_t ** board = (cell_t **) malloc(sizeof(cell_t*)*size);
-  int	i;
+  int i;
   for (i=0; i<size; i++)
   board[i] = (cell_t *) malloc(sizeof(cell_t)*size);
   return board;
@@ -50,7 +49,7 @@ void free_board (cell_t ** board, int size) {
 
 /* return the number of on cells adjacent to the i,j cell */
 int adjacent_to (cell_t ** board, int size, int i, int j) {
-  int	k, l, count=0;
+  int k, l, count=0;
 
   int sk = (i>0) ? i-1 : i;
   int ek = (i+1 < size) ? i+1 : i;
@@ -65,29 +64,32 @@ int adjacent_to (cell_t ** board, int size, int i, int j) {
   return count;
 }
 
-void *play (void *argc) {
-  int	i, j, a;
-  /* for each cell, apply the rules of Life */
-  // Barrera
-  // Fazer as gerações dentro da propria função
-    if(cont >= size)
-      pthread_exit(NULL);
-    pthread_mutex_lock(&m);
-    ++cont;
-    i = cont-1;
-    pthread_mutex_unlock(&m);
-  	for (j=0; j<size; j++) {
-    a = adjacent_to (board, size, i, j);
-    if (a == 2) newboard[i][j] = board[i][j];
-    if (a == 3) newboard[i][j] = 1;
-    if (a < 2) newboard[i][j] = 0;
-    if (a > 3) newboard[i][j] = 0;
+void *play () {
+    int i, j, a;
+    /* for each cell, apply the rules of Life */
+    while (1){                      //condição para fazer com que as threads nunca parem de procurar uma nova coluna, a menos que:
+      if(cont >= size) {                //se o contador de colunas coletadas for maior que o tamanho da matriz
+        pthread_barrier_wait (&barreira);     //a thread para na barreira e espera todas as outras threads entrarem no mesmo caso,
+                              //ou seja, espera que a ultima thread que ainda está executando a ultima coluna termine
+          pthread_exit(NULL);             //após todas as threads acabarem elas encerram
+      }
+      pthread_mutex_lock(&m);             //Exclusão mútua para que
+      cont++;                     //Se uma thread fazer cont++ (que indica que a coluna cont -1 foi coletada) ela precisa ter certeza que 
+      i = cont-1;                   //nenhuma outra thread execute essa linha, pois precisa garantir que o valor de i represente a coluna que foi coletada
+      pthread_mutex_unlock(&m);           //Final da exclusão mútua
+      for (j=0; j<size; j++) {            //Após a thread coletar uma coluna, ele percorre todas as linhas dessa coluna e verifica o que fazer com ela
+        a = adjacent_to (board, size, i, j);
+        if (a == 2) newboard[i][j] = board[i][j];
+        if (a == 3) newboard[i][j] = 1;
+        if (a < 2) newboard[i][j] = 0;
+        if (a > 3) newboard[i][j] = 0;
+      } 
   }
 }
 
 /* print the life board */
 void print (cell_t ** board, int size) {
-  int	i, j;
+  int i, j;
   /* for each row */
   for (j=0; j<size; j++) {
     /* print each column position... */
@@ -100,8 +102,8 @@ void print (cell_t ** board, int size) {
 
 /* read a file into the life board */
 void read_file (FILE * f, cell_t ** board, int size) {
-  int	i, j;
-  char	*s = (char *) malloc(size+10);
+  int i, j;
+  char  *s = (char *) malloc(size+10);
 
   /* read the first new line (it will be ignored) */
   fgets (s, size+10,f);
@@ -119,7 +121,7 @@ void read_file (FILE * f, cell_t ** board, int size) {
 
 int main (int argc, char *argv[]) {
   int i, j;
-  pthread_mutex_init(&m,NULL);
+  pthread_mutex_init(&m,NULL); 
   maxth = argc > 1? atoi(argv[1]) : 1;  // leitura do argumento
   FILE    *f;
   f = stdin;
@@ -133,30 +135,35 @@ int main (int argc, char *argv[]) {
   printf("Initial:\n");
   print(prev,size);
   #endif
-  // ---------- Criação de threads ---------- //
+  // ---------- Criação de ''maxth'' threads ---------- //
   pthread_t threads[maxth];
-  //int thread_arg[maxth];
+  pthread_barrier_init (&barreira, NULL, maxth+1);  //Criação da barreira com o número de threads mais a main thread
   for (i=0; i<maxth; i++) {
-    //thread_arg[i] = i;
-    pthread_create(&threads[i], NULL, play, NULL); //&thread_arg[i]
+    pthread_create(&threads[i], NULL, play, NULL);
   }
-  	for (i=0; i<steps; i++) {
-		for (j=0; j<maxth; j++)
-    	pthread_join(threads[j], NULL);
-
-    #ifdef DEBUG
-    printf("%d ----------\n", i + 1);
-    print (next,size);
-    #endif
-    tmp = next;
-    next = prev;
-    prev = tmp;
+  // ---------- Inicio da chamada das threads e da execução do GoL ---------- //
+    for (i=0; i<steps; i++) {         // for para determinar quantas gerações vai ter o GoL
+    for (j=0; j<maxth; j++){        // for para dar join em todas as threads e iniciar o GoL
+        pthread_join(threads[j], NULL);  
+      }
+      pthread_barrier_wait (&barreira);   // APÓS dar join em todas as threads ele só continuará o código após todas as threads acabarem!!!
+                          // A main só voltara a rodar depois de todas as threads serem executadas
+                        // Apartir dessa parte do código todas as threads estarão rodando
+                        // elas irão parar apenas quando a barreira permitir, ou seja, quando todas as threads perceberem que todas as colunas foram processadas
+      #ifdef DEBUG
+      printf("%d ----------\n", i + 1);
+      print (next,size);
+      #endif
+      tmp = next;
+      next = prev;
+      prev = tmp;
   }
 
 #ifdef RESULT
   printf("Final:\n");
   print (prev,size);
 #endif
+  pthread_barrier_destroy(&barreira);
   pthread_mutex_destroy(&m);
   free_board(prev,size);
   free_board(next,size);

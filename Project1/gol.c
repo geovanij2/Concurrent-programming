@@ -23,7 +23,6 @@ pthread_barrier_t barrier;
 
 // variaveis globais
 int max_threads;
-int cont;
 int size;
 int steps;
 cell_t** prev;
@@ -69,14 +68,17 @@ int adjacent_to (cell_t ** board, int size, int i, int j) {
 --------------------------------------------------------------*/
 void *play (void* arg) {
   // calculo de quantas linhas a thread deverá calcular:
+  int a, b;
   int thread_number = *((int *) arg);
   int valor_min = thread_number * (size / max_threads);
   int valor_max = valor_min + (size / max_threads);
+  if (valor_max > size)
+    valor_max = size;
   /* for each cell, apply the rules of Life */
   while (steps > 0){
     for (int i = valor_min; i < valor_max; i++){
       for (int j = 0; j < size; j++) {
-        int a = adjacent_to (prev, size, i, j);
+        a = adjacent_to (prev, size, i, j);
         if (a == 2)
           next[i][j] = prev[i][j];
         if (a == 3)
@@ -87,7 +89,7 @@ void *play (void* arg) {
           next[i][j] = 0;
       }
     }
-    int b = pthread_barrier_wait(&barrier);
+    b = pthread_barrier_wait(&barrier);
     if (b == PTHREAD_BARRIER_SERIAL_THREAD) {
       cell_t** tmp = next;
       next = prev;
@@ -96,6 +98,7 @@ void *play (void* arg) {
     }
     pthread_barrier_wait(&barrier);
   }
+  free(arg);
   pthread_exit(NULL);
 }
 
@@ -136,6 +139,7 @@ int main (int argc, char const *argv[]) {
   } else {
     max_threads = 2;
   }
+  printf("numeros de threads = %d\n", max_threads);
 
 
   FILE    *f;
@@ -161,11 +165,14 @@ int main (int argc, char const *argv[]) {
   pthread_barrier_init(&barrier, NULL, max_threads);
 
   for (int i = 0; i < max_threads; i++) {
-    pthread_create(&threads[i], NULL, play, (void*) &cont);
+    int* x = malloc(sizeof(int));
+    *x = i;
+    pthread_create(&threads[i], NULL, play, (void*) x);
   }
 
   for (int i = 0; i < max_threads; i++) {
     pthread_join(threads[i], NULL);
+    printf("%d\n", i);
   }
 
   pthread_barrier_destroy(&barrier);

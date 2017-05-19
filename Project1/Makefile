@@ -1,7 +1,7 @@
 CC=gcc
 
 FLAGS=-O3 -Wno-unused-result
-LDFLAGS=-lpthread
+LDFLAGS=-pthread
 #DEBUG=-DDEBUG
 RESULT=-DRESULT
 

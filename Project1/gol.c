@@ -17,8 +17,17 @@
 #include <pthread.h>  // include na biblioteca de threads para linux
 #include <sys/types.h>
 
+struct args {
+  cell_t ** board;
+  cell_t ** newboard;
+  int size;
+  int steps;
+  int thread_number;
+};
+
 typedef unsigned char cell_t;
 int max_threads;
+struct args arguments;
 
 cell_t ** allocate_board (int size) {
   cell_t ** board = (cell_t **) malloc(sizeof(cell_t*)*size);
@@ -54,6 +63,7 @@ int adjacent_to (cell_t ** board, int size, int i, int j) {
 }
 /*------------------------------------------------------------
   nova função play receberá 1 argumento e vai controlar steps
+  play precisa de board antiga, board nova, size, steps, numero da threads
 --------------------------------------------------------------*/
 void play (cell_t ** board, cell_t ** newboard, int size) {
   int	i, j, a;
@@ -120,6 +130,12 @@ int main (int argc, char const *argv[]) {
   cell_t ** tmp;
   int i;
 
+  arguments.board = prev;
+  arguments.newboard = next;
+  arguments.size = size;
+  arguments.steps = steps;
+  arguments.thread_number = 0;
+
   #ifdef DEBUG
   printf("Initial:\n");
   print(prev,size);
@@ -127,12 +143,12 @@ int main (int argc, char const *argv[]) {
 
 /*-------------------------------------
 Definir o argumento passado para as threads
-
 --------------------------------------*/
   pthread_t threads[max_threads];
 
   for (i=0; i<max_threads; i++) {
     pthread_create(&threads[i], NULL, play, NULL);
+    thread_number++;
   }
 
   for (i=0; i<max_threads; i++) {

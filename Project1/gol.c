@@ -17,30 +17,31 @@
 #include <pthread.h>  // include na biblioteca de threads para linux
 #include <sys/types.h>
 
-struct args {
-  cell_t ** board;
-  cell_t ** newboard;
-  int size;
-  int steps;
-  int thread_number;
-};
-
 typedef unsigned char cell_t;
+
+pthread_barrier_t barrier;
+
+// variaveis globais
 int max_threads;
-struct args arguments;
+int cont;
+int size;
+int steps;
+cell_t** prev;
+cell_t** next;
+
 
 cell_t ** allocate_board (int size) {
   cell_t ** board = (cell_t **) malloc(sizeof(cell_t*)*size);
-  int	i;
-  for (i=0; i<size; i++)
-  board[i] = (cell_t *) malloc(sizeof(cell_t)*size);
+  for (int i = 0; i < size; i++){
+    board[i] = (cell_t *) malloc(sizeof(cell_t)*size);
+  }
   return board;
 }
 
 void free_board (cell_t ** board, int size) {
-  int     i;
-  for (i=0; i<size; i++)
-  free(board[i]);
+  for (int i = 0; i < size; i++){
+    free(board[i]);
+  }
   free(board);
 }
 
@@ -54,38 +55,58 @@ int adjacent_to (cell_t ** board, int size, int i, int j) {
   int sl = (j>0) ? j-1 : j;
   int el = (j+1 < size) ? j+1 : j;
 
-  for (k=sk; k<=ek; k++)
-  for (l=sl; l<=el; l++)
-  count+=board[k][l];
+  for (int k=sk; k<=ek; k++) {
+    for (l=sl; l<=el; l++) {
+      count+=board[k][l];
+    }
+  }
   count-=board[i][j];
-
   return count;
 }
 /*------------------------------------------------------------
   nova função play receberá 1 argumento e vai controlar steps
   play precisa de board antiga, board nova, size, steps, numero da threads
 --------------------------------------------------------------*/
-void play (cell_t ** board, cell_t ** newboard, int size) {
-  int	i, j, a;
+void *play (void* arg) {
+  // calculo de quantas linhas a thread deverá calcular:
+  int thread_number = *((int *) arg);
+  int valor_min = thread_number * (size / max_threads);
+  int valor_max = valor_min + (size / max_threads);
   /* for each cell, apply the rules of Life */
-  for (i=0; i<size; i++)
-  for (j=0; j<size; j++) {
-    a = adjacent_to (board, size, i, j);
-    if (a == 2) newboard[i][j] = board[i][j];
-    if (a == 3) newboard[i][j] = 1;
-    if (a < 2) newboard[i][j] = 0;
-    if (a > 3) newboard[i][j] = 0;
+  while (steps > 0){
+    for (int i = valor_min; i < valor_max; i++){
+      for (int j = 0; j < size; j++) {
+        int a = adjacent_to (prev, size, i, j);
+        if (a == 2)
+          next[i][j] = prev[i][j];
+        if (a == 3)
+          next[i][j] = 1;
+        if (a < 2)
+          next[i][j] = 0;
+        if (a > 3)
+          next[i][j] = 0;
+      }
+    }
+    int b = pthread_barrier_wait(&barrier);
+    if (b == PTHREAD_BARRIER_SERIAL_THREAD) {
+      cell_t** tmp = next;
+      next = prev;
+      prev = tmp;
+      steps--;
+    }
+    pthread_barrier_wait(&barrier);
   }
+  pthread_exit(NULL);
 }
 
 /* print the life board */
 void print (cell_t ** board, int size) {
-  int	i, j;
   /* for each row */
-  for (j=0; j<size; j++) {
+  for (int j = 0; j < size; j++) {
     /* print each column position... */
-    for (i=0; i<size; i++)
-    printf ("%c", board[i][j] ? 'x' : ' ');
+    for (int i = 0; i < size; i++){
+      printf ("%c", board[i][j] ? 'x' : ' ');
+    }
     /* followed by a carriage return */
     printf ("\n");
   }
@@ -93,20 +114,17 @@ void print (cell_t ** board, int size) {
 
 /* read a file into the life board */
 void read_file (FILE * f, cell_t ** board, int size) {
-  int	i, j;
   char	*s = (char *) malloc(size+10);
-
   /* read the first new line (it will be ignored) */
   fgets (s, size+10,f);
-
   /* read the life board */
-  for (j=0; j<size; j++) {
+  for (int j = 0; j < size; j++) {
     /* get a string */
     fgets (s, size+10,f);
     /* copy the string to the life board */
-    for (i=0; i<size; i++)
-    board[i][j] = s[i] == 'x';
-
+    for (int i = 0; i < size; i++) {
+      board[i][j] = s[i] == 'x';
+    }
   }
 }
 
@@ -114,57 +132,43 @@ int main (int argc, char const *argv[]) {
   // recebendo numero maximo de threads como parametro argv
   // e setando max_threads como default = 2
   if (argc > 1) {
-    max_threads = atoi(argv[0]);
+    max_threads = atoi(argv[1]);
   } else {
     max_threads = 2;
   }
 
-  int size, steps;
+
   FILE    *f;
   f = stdin;
   fscanf(f,"%d %d", &size, &steps);
-  cell_t ** prev = allocate_board (size);
+
+
+  prev = allocate_board (size);
   read_file (f, prev,size);
   fclose(f);
-  cell_t ** next = allocate_board (size);
-  cell_t ** tmp;
-  int i;
 
-  arguments.board = prev;
-  arguments.newboard = next;
-  arguments.size = size;
-  arguments.steps = steps;
-  arguments.thread_number = 0;
+
+  next = allocate_board (size);
+
 
   #ifdef DEBUG
   printf("Initial:\n");
   print(prev,size);
   #endif
 
-/*-------------------------------------
-Definir o argumento passado para as threads
---------------------------------------*/
-  pthread_t threads[max_threads];
 
-  for (i=0; i<max_threads; i++) {
-    pthread_create(&threads[i], NULL, play, NULL);
-    thread_number++;
+  pthread_t threads[max_threads];
+  pthread_barrier_init(&barrier, NULL, max_threads);
+
+  for (int i = 0; i < max_threads; i++) {
+    pthread_create(&threads[i], NULL, play, (void*) &cont);
   }
 
-  for (i=0; i<max_threads; i++) {
+  for (int i = 0; i < max_threads; i++) {
     pthread_join(threads[i], NULL);
   }
 
-  for (i=0; i<steps; i++) {
-    play (prev,next,size);
-    #ifdef DEBUG
-    printf("%d ----------\n", i + 1);
-    print (next,size);
-    #endif
-    tmp = next;
-    next = prev;
-    prev = tmp;
-  }
+  pthread_barrier_destroy(&barrier);
 
 #ifdef RESULT
   printf("Final:\n");

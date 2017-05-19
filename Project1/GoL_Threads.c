@@ -86,6 +86,7 @@ void *play () {
           	if (a < 2) next[i][j] = 0;
           	if (a > 3) next[i][j] = 0;
       	} 
+      }  
   	}
 }
 

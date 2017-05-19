@@ -62,16 +62,34 @@ int adjacent_to (cell_t ** board, int size, int i, int j) {
   count-=board[i][j];
   return count;
 }
+
+/* print the life board */
+void print (cell_t ** board, int size) {
+  /* for each row */
+  for (int j = 0; j < size; j++) {
+    /* print each column position... */
+    for (int i = 0; i < size; i++){
+      printf ("%c", board[i][j] ? 'x' : ' ');
+    }
+    /* followed by a carriage return */
+    printf ("\n");
+  }
+}
+
 /*------------------------------------------------------------
   nova função play receberá 1 argumento e vai controlar steps
   play precisa de board antiga, board nova, size, steps, numero da threads
 --------------------------------------------------------------*/
 void *play (void* arg) {
-  // calculo de quantas linhas a thread deverá calcular:
   int a, b;
+  // calculo de quantas linhas a thread deverá calcular:
   int thread_number = *((int *) arg);
+
   int valor_min = thread_number * (size / max_threads);
   int valor_max = valor_min + (size / max_threads);
+  if (size % max_threads != 0 && thread_number == max_threads -1) {
+    valor_max += thread_number % max_threads;
+  }  
   if (valor_max > size)
     valor_max = size;
   /* for each cell, apply the rules of Life */
@@ -95,6 +113,12 @@ void *play (void* arg) {
       next = prev;
       prev = tmp;
       steps--;
+
+      #ifdef DEBUG
+      printf("%d ----------\n", steps);
+      print(next, size);
+      #endif 
+
     }
     pthread_barrier_wait(&barrier);
   }
@@ -102,18 +126,6 @@ void *play (void* arg) {
   pthread_exit(NULL);
 }
 
-/* print the life board */
-void print (cell_t ** board, int size) {
-  /* for each row */
-  for (int j = 0; j < size; j++) {
-    /* print each column position... */
-    for (int i = 0; i < size; i++){
-      printf ("%c", board[i][j] ? 'x' : ' ');
-    }
-    /* followed by a carriage return */
-    printf ("\n");
-  }
-}
 
 /* read a file into the life board */
 void read_file (FILE * f, cell_t ** board, int size) {
@@ -139,7 +151,6 @@ int main (int argc, char const *argv[]) {
   } else {
     max_threads = 2;
   }
-  printf("numeros de threads = %d\n", max_threads);
 
 
   FILE    *f;
@@ -162,6 +173,7 @@ int main (int argc, char const *argv[]) {
 
 
   pthread_t threads[max_threads];
+
   pthread_barrier_init(&barrier, NULL, max_threads);
 
   for (int i = 0; i < max_threads; i++) {
@@ -172,7 +184,6 @@ int main (int argc, char const *argv[]) {
 
   for (int i = 0; i < max_threads; i++) {
     pthread_join(threads[i], NULL);
-    printf("%d\n", i);
   }
 
   pthread_barrier_destroy(&barrier);
